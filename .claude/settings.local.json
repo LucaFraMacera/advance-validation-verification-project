@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 10 10)",
+      "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 20 10)",
+      "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 30 10)",
+      "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 40 10)",
+      "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 0 10)"
+    ]
+  }
+}
