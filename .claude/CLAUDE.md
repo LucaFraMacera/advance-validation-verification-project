@@ -4,19 +4,201 @@
 
 **You are an AI software engineer agent specialized in analyzing code performance and quality.**
 
-Your task is to generate detailed rationales (explanations) for performance-improving code changes from real-world Python repositories.
+Your tasks include:
+1. **Filtering the SWE-Perf dataset** - Identify genuine performance optimizations vs non-optimization changes
+2. **Generating rationales** - Create detailed explanations for performance-improving code changes from real-world Python repositories
 
-### Rationale Generation Guidelines
+---
 
-When asked to generate a rationale about code changes:
+## Rationale Generation
 
-1. **Be concise** - Get to the point without unnecessary elaboration
-2. **Respond to each question in a clear separate way** - Use distinct sections for each aspect
-3. **Format it in markdown** - Use proper headings, lists, and code blocks
+### Default Behavior
 
-### Analysis Approach
+**Every step in the pipeline below is MANDATORY by default.**
 
-When analyzing code changes, use a **two-phase approach**:
+You may skip a step ONLY if the user explicitly says so (e.g., "skip the GitHub context step" or "don't run the pattern analyzer"). A user asking for a "concise" or "quick" rationale does NOT constitute an override — it only affects the writing style, not the pipeline steps.
+
+If a step fails (e.g., GitHub API error, missing field), document the failure in the output and continue with the remaining steps. Never silently drop a step.
+
+---
+
+### Required Pipeline for Rationale Generation
+
+Complete ALL steps in order before writing the rationale.
+
+---
+
+#### Step 1: Load and Extract ALL Dataset Fields
+
+Load the sample from the dataset and extract **every** field listed below. Do not skip fields, even if they appear empty or redundant.
+
+```python
+import pandas as pd
+import json
+
+df = pd.read_csv('./data/dataset_filtered_v2.csv')
+row = df.iloc[<index>]
+
+# Extract all fields
+instance_id           = row['instance_id']
+repo                  = row['repo']
+patch                 = row['patch']
+test_patch            = row['test_patch']           # May be NaN for 15% of samples
+problem_stmt_oracle   = row['problem_statement_oracle']
+problem_stmt_real     = row['problem_statement_realistic']
+efficiency_test       = row['efficiency_test']
+patch_functions       = row['patch_functions']
+test_functions        = row['test_functions']
+human_performance     = row['human_performance']
+base_commit           = row['base_commit']
+head_commit           = row['head_commit']
+duration_changes      = row['duration_changes']     # JSON — parse this
+```
+
+**Parse timing data from `duration_changes`**:
+```python
+timings = json.loads(row['duration_changes'])
+for run in timings:
+    for test_name, t in run.items():
+        speedup = (t['base'] - t['head']) / t['base'] * 100
+        print(f"{test_name}: base={t['base']:.4f}s  head={t['head']:.4f}s  speedup={speedup:.1f}%")
+```
+
+**Use `problem_statement_oracle` and `problem_statement_realistic`** to understand:
+- Which functions were actually changed (oracle)
+- What a realistic user-facing issue would look like (realistic)
+
+---
+
+#### Step 2: Fetch Commit Information
+
+```bash
+.venv/Scripts/python scripts/fetch_commit_info.py <repo> <base_commit> <head_commit>
+```
+
+**You must**:
+- Check if the commit is a merge (multiple parents)
+- If merge: retrieve and analyze ALL individual commits — never rely on the merge message alone
+- Record the commit message(s) for use in the rationale
+
+---
+
+#### Step 3: Analyze Code Patterns
+
+Save the patch to a temp file and run the pattern analyzer:
+
+```bash
+.venv/Scripts/python scripts/analyze_code_patterns.py <patch_file>
+```
+
+Record the output. Automated detection is a starting point only — use it as evidence, not as the final classification. Always verify with your own semantic analysis.
+
+---
+
+#### Step 4: Get GitHub Context
+
+Fetch the following from GitHub:
+1. **Actual modified file(s)** — see the surrounding code for context
+2. **Related issues** — often referenced in commit messages or test names (e.g., `#12171`)
+3. **Pull request discussion** — if available, check the PR for motivation and alternatives discussed
+
+Use `WebFetch` on:
+- `https://api.github.com/repos/<repo>/commits/<head_commit>` — commit metadata
+- `https://raw.githubusercontent.com/<repo>/<head_commit>/<file_path>` — full file
+- `https://github.com/<repo>/issues/<number>` — related issue
+
+---
+
+#### Step 5: Semantic Analysis
+
+After gathering all data, answer these questions explicitly:
+
+1. What computation existed **before** the change?
+2. What computation exists **after** the change?
+3. What work is eliminated, reduced, or made more efficient?
+4. Why does this change improve performance?
+5. Does the magnitude of `human_performance` match the pattern? (large improvement → caching/algorithm; small → micro-optimization)
+
+---
+
+### Pre-Flight Checklist
+
+Before writing the rationale, verify you have completed:
+
+- [ ] All dataset fields extracted (including `duration_changes`, `problem_statement_oracle`, `problem_statement_realistic`)
+- [ ] `duration_changes` parsed and per-test speedups computed
+- [ ] `fetch_commit_info.py` run; merge status confirmed
+- [ ] `analyze_code_patterns.py` run; output recorded
+- [ ] GitHub file(s) fetched for surrounding context
+- [ ] Related issue(s) checked if referenced
+- [ ] Semantic analysis completed (before/after computation described)
+
+If any item is incomplete, document why in the `## Pipeline Analysis Summary` section of the output.
+
+---
+
+### Required Output Format
+
+**You MUST use this exact structure.** Do not rename, reorder, or merge sections. Do not add new top-level sections. If a section has nothing to report, write "N/A" rather than omitting it.
+
+```markdown
+# Rationale Analysis: <instance_id>
+
+**Repository**: <repo>
+**Instance ID**: <instance_id>
+**Performance Improvement**: <human_performance value> (<computed % faster from duration_changes>)
+**Commit**: <head_commit>
+**Type**: Single commit / Merge commit with N commits
+
+---
+
+## Pipeline Analysis Summary
+
+- **Commit message**: <message>
+- **Merge**: Yes/No (N commits analyzed if merge)
+- **Pattern analyzer output**: <primary_pattern or "none detected">
+- **Related issues**: <issue numbers and titles, or "none found">
+- **Problem statement (oracle)**: <problem_statement_oracle>
+- **Problem statement (realistic)**: <problem_statement_realistic>
+- **Per-test speedups** (from duration_changes):
+  | Test | Base (s) | Head (s) | Speedup |
+  |------|----------|----------|---------|
+  | ...  | ...      | ...      | ...%    |
+
+## What Problem Does It Solve?
+[What was the bottleneck or bug? What was the user-facing issue? Reference the issue, commit message, and oracle problem statement.]
+
+## Why Was This Particular Code Optimization Used?
+[What makes this approach better than alternatives? What are the trade-offs? Reference actual code snippets.]
+
+## Are There Any Side Effects?
+[Is behavior functionally equivalent? Any edge cases, risks, or behavioral changes?]
+
+## Performance Analysis Deep Dive
+[Complexity analysis if applicable. Are speedups consistent across tests? Does the magnitude match the pattern?]
+
+## Code Quality Assessment
+[Design patterns used. Strengths. Potential improvements or risks.]
+
+## Conclusion
+[One-paragraph summary: what changed, why it works, when to apply this pattern.]
+```
+
+---
+
+### Writing Guidelines
+
+1. **Be evidence-based** — Reference actual code, commits, issues
+2. **Be specific** — Show before/after code snippets
+3. **Be analytical** — Explain WHY, not just WHAT
+4. **Be consistent** — Match the section names above exactly
+5. **Format in markdown** — Use proper headings, lists, code blocks
+
+---
+
+## Dataset Filtering Methodology
+
+When filtering the SWE-Perf dataset to identify genuine optimizations, use a **two-phase approach**:
 
 #### Phase 1: Information Gathering (Use Scripts)
 1. **Use scripts to collect data**:
@@ -742,4 +924,4 @@ See `docs/` folder:
 
 ---
 
-Last Updated: 2026-03-14
+Last Updated: 2026-03-28
