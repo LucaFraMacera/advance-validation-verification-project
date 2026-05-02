@@ -55,14 +55,24 @@ head_commit           = row['head_commit']
 duration_changes      = row['duration_changes']     # JSON — parse this
 ```
 
-**Parse timing data from `duration_changes`**:
+**Parse timing data from `duration_changes` — print every individual run**:
 ```python
+import json
+
 timings = json.loads(row['duration_changes'])
-for run in timings:
+print(f"Total runs: {len(timings)}")
+for i, run in enumerate(timings):
     for test_name, t in run.items():
         speedup = (t['base'] - t['head']) / t['base'] * 100
-        print(f"{test_name}: base={t['base']:.4f}s  head={t['head']:.4f}s  speedup={speedup:.1f}%")
+        print(f"Run {i+1:02d} | {test_name}: base={t['base']:.6f}s  head={t['head']:.6f}s  speedup={speedup:+.2f}%")
 ```
+
+**Traceability rule — CRITICAL**: Every performance number in the rationale must be traceable to a concrete source.
+- The source can be any benchmark or test data related to the code change: `duration_changes` in the dataset, CI benchmark output, repository benchmark scripts, profiling results, or test run output.
+- Do NOT copy-paste raw per-run tables into the rationale. Instead, compute key statistics (mean speedup, std dev, min, max, number of runs) from the raw data and **explain what they mean** — whether the improvement is consistent, within noise, or statistically meaningful.
+- For every statistic reported, explicitly state: (1) what it was computed from (e.g., "computed from 20 repeated runs of `test_distribution[False-True-log]`"), (2) where that data comes from (e.g., "Source: `duration_changes` field"), and (3) what the number tells you about the change.
+- If no benchmark or test data is available for the sample, state that explicitly — do not estimate or approximate performance claims.
+**NO DATASET-LEVEL REFERENCES — ABSOLUTE RULE**: The rationale must never reference the dataset as a whole in any form. This includes — but is not limited to — phrases like "among the smallest in the dataset", "one of the largest improvements", "bottom/top X% of the dataset", "X of Y instances", "median across the dataset", or any other comparison that positions this sample relative to a collection of other samples. The rationale must stand on its own for any code change, whether or not it belongs to a known dataset. If you find yourself writing a sentence that compares `human_performance` or any other metric to other samples, delete it entirely.
 
 **Use `problem_statement_oracle` and `problem_statement_realistic`** to understand:
 - Which functions were actually changed (oracle)
@@ -118,6 +128,10 @@ After gathering all data, answer these questions explicitly:
 3. What work is eliminated, reduced, or made more efficient?
 4. Why does this change improve performance?
 5. Does the magnitude of `human_performance` match the pattern? (large improvement → caching/algorithm; small → micro-optimization)
+6. **Is the performance improvement the primary intent of the change, or a side effect?** Use the commit message, related issues, and PR discussion to determine this. Classify as one of:
+   - **Targeted optimization** — the change was made explicitly to improve performance (commit message mentions speed/performance, issue is a performance complaint, no functional behavior change).
+   - **Side effect of bug fix** — the change was made to correct incorrect behavior; performance improved incidentally (commit message mentions "fix"/"bug"/"incorrect", issue is a correctness complaint, behavior changes).
+   - **Ambiguous** — evidence is mixed or insufficient to distinguish. Document what evidence supports each side.
 
 ---
 
@@ -132,6 +146,7 @@ Before writing the rationale, verify you have completed:
 - [ ] GitHub file(s) fetched for surrounding context
 - [ ] Related issue(s) checked if referenced
 - [ ] Semantic analysis completed (before/after computation described)
+- [ ] Change classification determined: Targeted optimization / Side effect of bug fix / Ambiguous
 
 If any item is incomplete, document why in the `## Pipeline Analysis Summary` section of the output.
 
@@ -149,6 +164,7 @@ If any item is incomplete, document why in the `## Pipeline Analysis Summary` se
 **Performance Improvement**: <human_performance value> (<computed % faster from duration_changes>)
 **Commit**: <head_commit>
 **Type**: Single commit / Merge commit with N commits
+**Classification**: Targeted optimization / Side effect of bug fix / Ambiguous
 
 ---
 
@@ -160,13 +176,15 @@ If any item is incomplete, document why in the `## Pipeline Analysis Summary` se
 - **Related issues**: <issue numbers and titles, or "none found">
 - **Problem statement (oracle)**: <problem_statement_oracle>
 - **Problem statement (realistic)**: <problem_statement_realistic>
-- **Per-test speedups** (from duration_changes):
-  | Test | Base (s) | Head (s) | Speedup |
-  |------|----------|----------|---------|
-  | ...  | ...      | ...      | ...%    |
+- **Benchmark data summary** (source: `<field or external source>`, N runs per test, M tests total):
+
+  Do NOT produce one table row per test. Instead, group tests by their observed behavior and describe each group in prose. Cite the source and run count for every figure stated. For example, if tests cluster into distinct patterns (consistent large gains, noisy/inconclusive results, unaffected paths), describe each group with its mean speedup, std dev, and what that implies about the change. If all tests show the same pattern, a single sentence is sufficient. If no benchmark data is available, write "No benchmark data available for this sample."
 
 ## What Problem Does It Solve?
 [What was the bottleneck or bug? What was the user-facing issue? Reference the issue, commit message, and oracle problem statement.]
+
+## Classification: Targeted Optimization or Side Effect?
+[State the classification: **Targeted optimization**, **Side effect of bug fix**, or **Ambiguous**. Justify with evidence from the commit message, related issues, and PR discussion. Explain what the primary intent of the change was and whether performance was an explicit goal or an incidental outcome.]
 
 ## Why Was This Particular Code Optimization Used?
 [What makes this approach better than alternatives? What are the trade-offs? Reference actual code snippets.]

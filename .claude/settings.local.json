@@ -5,7 +5,15 @@
       "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 20 10)",
       "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 30 10)",
       "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 40 10)",
-      "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 0 10)"
+      "Bash(.venv/Scripts/python scripts/batch_analyzer_compact.py 0 10)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(curl -s \"https://api.github.com/repos/astropy/astropy/issues/16065\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('Title:', d.get\\('title'\\)\\); print\\('State:', d.get\\('state'\\)\\); print\\('Body:', d.get\\('body',''\\)[:3000]\\)\")",
+      "Bash(curl -s \"https://api.github.com/repos/pydata/xarray/commits/30728618b08a05380e42909f92b82ddb55640e71\")",
+      "Bash(python -c ':*)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s \"https://api.github.com/repos/sphinx-doc/sphinx/commits/e57034f10c69e8f1123c2da9597011259405666c\")"
     ]
   }
 }
