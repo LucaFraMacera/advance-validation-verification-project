@@ -13,7 +13,27 @@
       "Bash(python -c ':*)",
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:github.com)",
-      "Bash(curl -s \"https://api.github.com/repos/sphinx-doc/sphinx/commits/e57034f10c69e8f1123c2da9597011259405666c\")"
+      "Bash(curl -s \"https://api.github.com/repos/sphinx-doc/sphinx/commits/e57034f10c69e8f1123c2da9597011259405666c\")",
+      "Bash(curl -s -H \"Authorization: token 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\" \"https://api.github.com/repos/astropy/astropy/commits/96af9a2ae0d0cb88e8c7f6ea26ac534a67b3dfcd\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('MESSAGE:', d['commit']['message']\\); print\\('PARENTS:', len\\(d['parents']\\)\\); [print\\('PARENT:', p['sha']\\) for p in d['parents']]\")",
+      "Bash(curl -s -H \"Authorization: token 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\" \"https://api.github.com/repos/astropy/astropy/commits/32bed2cde01098bddd145441e5ec5f7b7b0d8661\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('MESSAGE:', d['commit']['message'][:500]\\); print\\('PARENTS:', len\\(d['parents']\\)\\); [print\\('  parent:', p['sha']\\) for p in d['parents']]\")",
+      "Bash(curl -s -H \"Authorization: token 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\" \"https://api.github.com/repos/astropy/astropy/commits/8dfbb0ffa1f18c6d89417e3120ec6cf1e04662c0\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Message:', d['commit']['message'][:500]\\); print\\('Parents:', len\\(d['parents']\\)\\); [print\\('Parent SHA:', p['sha']\\) for p in d['parents']]\")",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -H \"Authorization: token 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\" \"https://api.github.com/repos/astropy/astropy/commits/7eac388cd073eb50f44afac72ae90c244bb390c2\")",
+      "Bash(python -c \"import sys, json; d=json.load\\(sys.stdin\\); print\\('Message:', d['commit']['message'][:300]\\); print\\('Parents:', len\\(d['parents']\\)\\); [print\\('Parent SHA:', p['sha']\\) for p in d['parents']]\")",
+      "Bash(python3 *)",
+      "Bash(curl -s -H \"Authorization: token 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\" \"https://api.github.com/repos/astropy/astropy/commits/42d12de648e2232856079e9bc4a756f2bd716827\")",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('Message:', d['commit']['message']\\); print\\('Parents:', len\\(d['parents']\\)\\); [print\\('Parent:', p['sha']\\) for p in d['parents']]\")",
+      "Bash(.venv\\\\Scripts\\\\python.exe *)",
+      "Bash(python -c \"import sys, json; d=json.load\\(sys.stdin\\); print\\('Message:', d['commit']['message'][:400]\\); print\\('Parents count:', len\\(d['parents']\\)\\); [print\\('Parent:', p['sha']\\) for p in d['parents']]\")",
+      "Bash(curl -s -H \"Authorization: token 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\" \"https://api.github.com/repos/astropy/astropy/commits/0276d447e2d35421e2f9be2f8a4d66dc60ff1365\")",
+      "Bash(curl -s -H \"Authorization: token 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\" \"https://api.github.com/repos/astropy/astropy/commits/5f40d646f58045c48f5ccab9cbf97c61c05f145c\")",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(python *)",
+      "Bash(curl -s -H \"Authorization: token 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\" \"https://api.github.com/repos/astropy/astropy/commits/4d0ededa242a4f59149abcbd03d6030521f4d25c\")",
+      "Bash(curl -s -H \"Authorization: token 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\" \"https://api.github.com/repos/astropy/astropy/commits/5e1cca7b8574dbf6fa9b43d1bac7b548465910ca\")"
     ]
   }
 }

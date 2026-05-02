@@ -26,6 +26,32 @@ If a step fails (e.g., GitHub API error, missing field), document the failure in
 
 Complete ALL steps in order before writing the rationale.
 
+**Step Logging — REQUIRED**: Before executing each step, output a progress line so the user can track execution. After completing the step, output a one-line summary of the key finding. If a step fails, output a clear error message describing what went wrong and why (e.g., "GitHub API returned 403 — rate limit hit; retrying in 60s" or "Field `test_patch` is NaN — skipping test analysis").
+
+```
+[Step 1/5] Loading dataset fields — reading all fields from the CSV row and parsing timing data...
+→ Found: instance_id=<id>, human_performance=<val>, N timing runs across M tests
+
+[Step 2/5] Fetching commit information — checking if this is a merge commit and retrieving messages...
+→ Single commit: "<message>" / Merge commit with N parents (M individual commits analyzed)
+
+[Step 3/5] Analyzing code patterns — running static pattern detection on the patch...
+→ Detected pattern: <pattern> / No dominant pattern detected — falling back to manual analysis
+
+[Step 4/5] Fetching GitHub context — retrieving the modified file(s) and any linked issues or PRs...
+→ Fetched <file(s)>; related issue: <#N: "title"> / No linked issue found
+
+[Step 5/5] Performing semantic analysis — reasoning about what changed, why, and whether it's intentional...
+→ Classification: <Targeted optimization / Side effect of bug fix / Ambiguous / Not a performance change>
+```
+
+**On error**: Do not silently skip. Output a visible error block before continuing:
+```
+[Step N/5] <step name> — FAILED
+  Error: <what went wrong, e.g. "GitHub API 403: rate limit exceeded">
+  Action: <what you're doing about it, e.g. "retrying in 60s" or "continuing without this data">
+```
+
 ---
 
 #### Step 1: Load and Extract ALL Dataset Fields
@@ -132,6 +158,7 @@ After gathering all data, answer these questions explicitly:
    - **Targeted optimization** — the change was made explicitly to improve performance (commit message mentions speed/performance, issue is a performance complaint, no functional behavior change).
    - **Side effect of bug fix** — the change was made to correct incorrect behavior; performance improved incidentally (commit message mentions "fix"/"bug"/"incorrect", issue is a correctness complaint, behavior changes).
    - **Ambiguous** — evidence is mixed or insufficient to distinguish. Document what evidence supports each side.
+   - **Not a performance change** — the change is unrelated to performance entirely (feature addition, API redesign, refactoring, documentation, etc.). State this explicitly and do not attempt a performance classification.
 
 ---
 
@@ -164,7 +191,7 @@ If any item is incomplete, document why in the `## Pipeline Analysis Summary` se
 **Performance Improvement**: <human_performance value> (<computed % faster from duration_changes>)
 **Commit**: <head_commit>
 **Type**: Single commit / Merge commit with N commits
-**Classification**: Targeted optimization / Side effect of bug fix / Ambiguous
+**Classification**: Targeted optimization / Side effect of bug fix / Ambiguous / Not a performance change
 
 ---
 
@@ -181,36 +208,36 @@ If any item is incomplete, document why in the `## Pipeline Analysis Summary` se
   Do NOT produce one table row per test. Instead, group tests by their observed behavior and describe each group in prose. Cite the source and run count for every figure stated. For example, if tests cluster into distinct patterns (consistent large gains, noisy/inconclusive results, unaffected paths), describe each group with its mean speedup, std dev, and what that implies about the change. If all tests show the same pattern, a single sentence is sufficient. If no benchmark data is available, write "No benchmark data available for this sample."
 
 ## What Problem Does It Solve?
-[What was the bottleneck or bug? What was the user-facing issue? Reference the issue, commit message, and oracle problem statement.]
+[1-3 sentences. State the bottleneck or bug and its user-facing symptom. Cite the commit message or issue directly.]
 
 ## Classification: Targeted Optimization or Side Effect?
-[State the classification: **Targeted optimization**, **Side effect of bug fix**, or **Ambiguous**. Justify with evidence from the commit message, related issues, and PR discussion. Explain what the primary intent of the change was and whether performance was an explicit goal or an incidental outcome.]
+[One sentence stating the classification (**Targeted optimization** / **Side effect of bug fix** / **Ambiguous** / **Not a performance change**), followed by the single strongest piece of evidence (commit message wording, issue type, or behavior change). If the change is unrelated to performance, state this explicitly and describe what kind of change it is instead (feature, refactor, docs, etc.).]
 
 ## Why Was This Particular Code Optimization Used?
-[What makes this approach better than alternatives? What are the trade-offs? Reference actual code snippets.]
+[Reference to the changed file and line number(s), then 1-2 sentences on why this approach works. Skip lengthy alternatives discussion unless a trade-off is non-obvious. Do NOT include code snippets unless the user explicitly requests them.]
 
 ## Are There Any Side Effects?
-[Is behavior functionally equivalent? Any edge cases, risks, or behavioral changes?]
+[One sentence: functionally equivalent or not. If not, state what changed behaviorally.]
 
 ## Performance Analysis Deep Dive
-[Complexity analysis if applicable. Are speedups consistent across tests? Does the magnitude match the pattern?]
+[Key stats only: mean speedup ± std dev, number of runs, consistency verdict (consistent / noisy). One sentence on whether magnitude matches the pattern.]
 
 ## Code Quality Assessment
-[Design patterns used. Strengths. Potential improvements or risks.]
+[2-3 bullet points max: pattern used, one strength, one risk or limitation if present.]
 
 ## Conclusion
-[One-paragraph summary: what changed, why it works, when to apply this pattern.]
+[One sentence stating the classification label (**Targeted optimization** / **Side effect of bug fix** / **Ambiguous** / **Not a performance change**) followed by what changed and why it works.]
 ```
 
 ---
 
 ### Writing Guidelines
 
-1. **Be evidence-based** — Reference actual code, commits, issues
-2. **Be specific** — Show before/after code snippets
-3. **Be analytical** — Explain WHY, not just WHAT
-4. **Be consistent** — Match the section names above exactly
-5. **Format in markdown** — Use proper headings, lists, code blocks
+1. **Be concise** — Each section should be as short as possible while remaining accurate. No padding, no restating what is already obvious from the code or header.
+2. **Be evidence-based** — Back every claim with a code snippet, commit message quote, or statistic. No unsupported assertions.
+3. **Reference, don't reproduce** — In "Why Was This Particular Code Optimization Used?", cite the file and line number(s) instead of quoting code. Only include code snippets when the user explicitly asks.
+4. **Lead with the answer** — State the key finding at the start of each section, then add supporting detail only if needed.
+5. **Be consistent** — Match the section names above exactly. Format in markdown.
 
 ---
 
@@ -681,6 +708,12 @@ After generating rationales, evaluate:
 - Is it correct?
 - Is it comprehensive?
 - Is it coherent with the commit message?
+
+---
+
+## Script Permissions
+
+The scripts in `scripts/` are **pipeline skills** — they are part of the standard rationale generation workflow. Run them directly without asking the user for permission. For any other file edits or actions outside the pipeline, ask first.
 
 ---
 
