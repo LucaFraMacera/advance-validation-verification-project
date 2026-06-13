@@ -1,262 +1,28 @@
-# Analysis Pipeline Scripts
+# Rationale Generation for Performance-Improving Code Changes
 
-This directory contains the complete pipeline for analyzing and filtering the SWE-Perf dataset.
+Course project for **AV&V (Analysis, Verification & Validation), A.Y. 25-26 — Università dell'Aquila**, built on the **SWE-Perf** dataset of 140 real-world performance-improving commits from nine popular Python libraries (`pydata/xarray`, `scikit-learn`, `sympy`, and others). Each instance pairs a Git diff with repeated timing measurements.
 
-## Pipeline Overview
+The goal is to instruct a large language model (Anthropic's **Claude**) to generate a detailed, evidence-based analysis explaining *why* a given code change improves performance.
 
-```
-dataset.csv
-    ↓
-[1] fetch_commit_info.py → commit_info.json
-    ↓
-[2] analyze_code_patterns.py → code_analysis.json
-    ↓
-[3] classify_sample.py → classification.json
-    ↓
-[4] filter_dataset.py → dataset_filtered_v2.csv
-```
+## Pipeline
 
-## Scripts
+The rationale generation pipeline is defined entirely in the project's [`.claude/CLAUDE.md`](.claude/CLAUDE.md) file, which the agent loads automatically at startup. It accepts two types of input:
 
-### 1. `fetch_commit_info.py`
+- **Dataset reference** — an index or instance ID from the SWE-Perf CSV. All five steps are executed.
+- **GitHub commit reference** — a repository name and commit hash (or URL). Step 1 is skipped and the pipeline begins at step 2, using the commit as the sole entry point.
 
-**Purpose**: Fetch commit information from GitHub API
+No step may be silently skipped: if a step fails, the agent documents the failure and continues with the remaining steps.
 
-**Features**:
-- Detects if commit is a merge (multiple parents)
-- Retrieves all individual commits in a merge
-- Implements retry logic for API failures
-- Returns commit messages and metadata
+1. **Load dataset fields** *(dataset input only)* — Load the target instance from the dataset CSV and extract all available fields: repository, patch, test patch, problem statements, efficiency tests, timing data, and commit hashes. The `duration_changes` field (a JSON array of repeated base/head timing measurements) is parsed and per-run speedups are computed for every test case.
 
-**Usage**:
-```bash
-python fetch_commit_info.py <repo> <base_commit> <head_commit>
+2. **Fetch commit information** — Using the GitHub API, retrieve the commit associated with the change and check whether it is a merge commit (multiple parents). If so, all individual commits bundled in the merge are retrieved and analysed separately, since merge messages are typically uninformative and the relevant optimisation may be buried in one of many commits.
 
-# Example:
-python fetch_commit_info.py sphinx-doc/sphinx 5ba344d6 2c98e909
-```
+3. **Analyse code patterns** — Pass the patch to a static pattern analyser (`scripts/analyze_code_patterns.py`) that classifies the change into a known pattern: caching/memoisation, library function substitution, data structure change, early termination, redundancy removal, or algorithm change. This output is a starting point only — not the final classification.
 
-**Output**: JSON with commit information
-```json
-{
-  "repo": "sphinx-doc/sphinx",
-  "is_merge": true,
-  "total_commits": 96,
-  "commits": [
-    {
-      "sha": "...",
-      "message": "..."
-    }
-  ]
-}
-```
+4. **Fetch GitHub context** — Retrieve the full source file(s) modified by the patch, plus any related issues or pull request discussions referenced in the commit message. This provides surrounding context absent from the diff alone and helps establish the motivation behind the change.
 
-### 2. `analyze_code_patterns.py`
+5. **Semantic analysis** — With all data gathered, reason explicitly about what computation existed before and after the change, what work is eliminated or made more efficient, and whether the performance improvement was the primary intent or an incidental side effect. The change is classified as one of: **targeted optimization**, **side effect of bug fix**, **ambiguous**, or **not a performance change**.
 
-**Purpose**: Analyze code patches for optimization patterns
+The output is written in a fixed, section-by-section format covering the problem solved, the classification, the rationale for the chosen optimisation, behavioural side effects, a statistical summary of the benchmark data, and a code quality assessment. Two rules are mandatory: every performance figure must be traceable to a concrete source (typically the `duration_changes` field), and the rationale must never reference the dataset as a whole (e.g. relative rankings across instances).
 
-**Patterns Detected**:
-- Caching/memoization (`@lru_cache`, `@cacheit`, cache variables)
-- Early returns (skip computation)
-- Library function optimization (scipy, numpy, numbagg)
-- Data structure changes (list→set, dict→defaultdict)
-- Redundancy removal (net code reduction)
-- Identity checks (`is not None` vs truthiness)
-- Lazy evaluation (conditional initialization)
-- Configuration normalization (bypass environmental queries)
-
-**Usage**:
-```bash
-python analyze_code_patterns.py <patch_file>
-cat patch.diff | python analyze_code_patterns.py -
-
-# Example with sample from dataset:
-python -c "import pandas as pd; print(pd.read_csv('data/dataset.csv').iloc[0]['patch'])" | python analyze_code_patterns.py -
-```
-
-**Output**: JSON with pattern analysis
-```json
-{
-  "has_optimization": true,
-  "primary_pattern": "caching",
-  "patterns": {
-    "caching": true,
-    "early_return": false,
-    ...
-  },
-  "evidence": ["Cache variable: _cache = {}"],
-  "stats": {
-    "lines_added": 10,
-    "lines_removed": 5,
-    "net_change": 5
-  }
-}
-```
-
-### 3. `classify_sample.py`
-
-**Purpose**: Make KEEP/EXCLUDE/UNCLEAR decision
-
-**Decision Logic**:
-1. **PRIMARY**: Code analysis - does code show optimization pattern?
-2. **SECONDARY**: Commit messages - hints for non-optimization changes
-
-**Classification**:
-- **KEEP**: Code demonstrates performance optimization
-- **EXCLUDE**: Feature, bug fix, documentation, compatibility
-- **UNCLEAR**: Ambiguous or insufficient information
-
-**Usage**:
-```bash
-python classify_sample.py <commit_info.json> <code_analysis.json> <performance>
-
-# Example:
-python classify_sample.py commit.json analysis.json 0.0045
-```
-
-**Output**: JSON with decision
-```json
-{
-  "decision": "KEEP",
-  "reason": "Caching/memoization - Cache variable: _cache = {}",
-  "performance": 0.0045,
-  "is_merge": false,
-  "commits_analyzed": 1
-}
-```
-
-### 4. `analyze_single_sample.py`
-
-**Purpose**: End-to-end analysis orchestrator
-
-**What it does**:
-1. Loads sample from dataset.csv
-2. Fetches commit info from GitHub
-3. Analyzes code patterns
-4. Makes classification decision
-5. Displays complete analysis
-6. Optionally saves to decisions file
-
-**Usage**:
-```bash
-python analyze_single_sample.py <sample_index>
-
-# Example:
-python analyze_single_sample.py 119
-```
-
-**Output**: Complete analysis printed to console + optional CSV append
-
-### 5. `filter_dataset.py`
-
-**Purpose**: Create final filtered dataset
-
-**What it does**:
-1. Reads filtering decisions from `filtering_v2.csv`
-2. Filters original dataset to KEEP samples only
-3. Creates `dataset_filtered_v2.csv` with same columns as original
-
-**Usage**:
-```bash
-python filter_dataset.py [decisions_file] [output_file]
-
-# Default:
-python filter_dataset.py
-
-# Custom files:
-python filter_dataset.py my_decisions.csv my_filtered_dataset.csv
-```
-
-**Output**: Filtered dataset CSV + statistics
-
-### 6. `utils.py`
-
-**Purpose**: Utility functions for loading data
-
-**Functions**:
-- `load_from_csv(path)` - Load dataset from CSV
-- `load_from_hf(name, split)` - Load from HuggingFace
-
-## Complete Workflow Example
-
-```bash
-# 1. Analyze a single sample (e.g., sample 119 - the famous merge case)
-python analyze_single_sample.py 119
-
-# 2. Batch analyze multiple samples (manual loop or script)
-for i in {0..139}; do
-    python analyze_single_sample.py $i >> analysis_log.txt
-done
-
-# 3. After all samples analyzed, create filtered dataset
-python filter_dataset.py
-
-# Result: dataset_filtered_v2.csv with 79 KEEP samples
-```
-
-## Methodology (from CLAUDE.md)
-
-### Key Principles
-
-1. **Code Analysis as PRIMARY**
-   - Examine actual behavioral changes in code
-   - Identify semantic patterns, not syntax
-   - Focus on what the code DOES, not what it's called
-
-2. **Commit Messages as SECONDARY**
-   - Use as hints, not definitive classification
-   - Messages can be vague or misleading
-   - Verify claims against code changes
-
-3. **Merge Commit Handling**
-   - Detect merges by checking parent count
-   - Analyze ALL individual commits in merge
-   - Don't make snap judgments on merge message alone
-
-4. **Pattern Focus**
-   - Look for optimization patterns (caching, early returns, etc.)
-   - Not specific implementations
-   - Generic behavioral improvements
-
-### Decision Criteria
-
-**KEEP** if code change:
-- Introduces caching/memoization
-- Adds early termination to skip work
-- Improves algorithmic complexity
-- Uses optimized library functions
-- Changes data structures for performance
-- Removes redundant operations
-- Normalizes configuration to avoid queries
-
-**EXCLUDE** if code change:
-- Adds new features
-- Fixes bugs (without optimization)
-- Adds error handling/validation
-- Updates documentation
-- Adds type annotations
-- Refactors without performance intent
-
-## Files Generated
-
-- `filtering_v2.csv` - All filtering decisions (index, instance_id, decision, reason, performance)
-- `dataset_filtered_v2.csv` - Filtered dataset with KEEP samples only (same columns as original)
-- `FILTERING_V2_SUMMARY.md` - Analysis summary and statistics
-
-## Dependencies
-
-```bash
-pip install pandas requests
-```
-
-For GitHub API (optional but recommended):
-- Set `GITHUB_TOKEN` environment variable for higher rate limits
-- Unauthenticated: 60 requests/hour
-- Authenticated: 5,000 requests/hour
-
-## Notes
-
-- Scripts assume running from project root directory
-- GitHub API retry logic handles rate limits automatically
-- All scripts output JSON for easy parsing/chaining
-- Semantic analysis requires human judgment - scripts provide data, not final decisions
+The user can customise the output via the initial prompt (e.g. changing the output structure or how the classification is done) but cannot alter the core pipeline logic — skipping steps or ignoring gathered data — since these steps build the context needed to fully capture the consequences of a change.
