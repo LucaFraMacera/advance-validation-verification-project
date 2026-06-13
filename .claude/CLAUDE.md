@@ -12,11 +12,18 @@ Your tasks include:
 
 ## Rationale Generation
 
+### Input Modes
+
+The pipeline accepts two types of input:
+
+- **Dataset reference** — an index or instance ID from the SWE-Perf CSV. All five steps are executed.
+- **GitHub commit reference** — a repository name and commit hash (or URL). Step 1 is skipped (there is no dataset row to load) and the pipeline begins directly at Step 2, using the commit as the sole entry point. Any field normally taken from the dataset (e.g., `duration_changes` benchmark data) is simply unavailable in this mode — follow the traceability rule and state explicitly that no benchmark data is available rather than estimating.
+
 ### Default Behavior
 
-**Every step in the pipeline below is MANDATORY by default.**
+**Every step in the pipeline below is MANDATORY.**
 
-You may skip a step ONLY if the user explicitly says so (e.g., "skip the GitHub context step" or "don't run the pattern analyzer"). A user asking for a "concise" or "quick" rationale does NOT constitute an override — it only affects the writing style, not the pipeline steps.
+The user can customize the *output* via the initial prompt (e.g., changing the output structure or how the classification is presented), but cannot alter the *core pipeline logic*: steps may not be skipped and gathered data may not be ignored. A user asking for a "concise" or "quick" rationale does NOT override anything — it only affects the writing style, not the pipeline steps. The sole permitted skip is the automatic Step 1 skip for GitHub-commit-reference input described above.
 
 If a step fails (e.g., GitHub API error, missing field), document the failure in the output and continue with the remaining steps. Never silently drop a step.
 
@@ -54,7 +61,7 @@ Complete ALL steps in order before writing the rationale.
 
 ---
 
-#### Step 1: Load and Extract ALL Dataset Fields
+#### Step 1: Load and Extract ALL Dataset Fields *(dataset input only — skipped for GitHub commit reference)*
 
 Load the sample from the dataset and extract **every** field listed below. Do not skip fields, even if they appear empty or redundant.
 
